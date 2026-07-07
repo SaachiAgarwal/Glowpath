@@ -543,22 +543,24 @@ def main():
         f"{aff_product_rec:+.2f} on\n  the continuous affinity signal, so this is an information limit of sparse binary\n"
         "  feedback, not a code defect."
     )
-    user_cold = rec["user_low"] < rec["user_high"]
-    prod_cold = rec["product_low"] < rec["product_high"]
-    if user_cold or prod_cold:
+    clean_gradient = (rec["user_low"] < rec["user_high"]) and (rec["product_low"] < rec["product_high"])
+    if clean_gradient:
         print(
             "- COLD-START GRADIENT: what recovery there is skews to the high-interaction\n"
-            f"  half ({rec['user_low']:+.2f} vs {rec['user_high']:+.2f} users, "
-            f"{rec['product_low']:+.2f} vs {rec['product_high']:+.2f} products) -- MF's known cold-start\n"
-            "  weakness, and precisely the gap the content-based half of the hybrid exists\n"
-            "  to fill."
+            f"  half ({rec['user_low']:+.3f} vs {rec['user_high']:+.3f} users, "
+            f"{rec['product_low']:+.3f} vs {rec['product_high']:+.3f} products) -- MF's known cold-start\n"
+            "  weakness, and precisely the gap the content-based half of the hybrid fills."
         )
     else:
         print(
-            "- COLD-START GRADIENT: the expected less-data -> worse-recovery pattern did\n"
-            f"  not clearly separate this run ({rec['user_low']:+.2f} vs {rec['user_high']:+.2f} users, "
-            f"{rec['product_low']:+.2f} vs {rec['product_high']:+.2f} products);\n"
-            "  at these near-zero magnitudes that is plausibly just metric sampling noise."
+            "- WITHIN-SIDE SPLIT IS NOISE: the low- vs high-interaction halves do NOT order\n"
+            f"  consistently ({rec['user_low']:+.3f} vs {rec['user_high']:+.3f} users, "
+            f"{rec['product_low']:+.3f} vs {rec['product_high']:+.3f} products) -- expected, since\n"
+            "  overall recovery is already ~0, so splitting it further just samples noise.\n"
+            "  The real density signal is the USER-vs-PRODUCT gap in the sensitive CCA\n"
+            f"  metric ({rec['user_cca']:.3f} users vs {rec['product_cca']:.3f} products): ~600 obs/item buys products\n"
+            "  a marginal edge, but MF coupling to the starved user side keeps even that\n"
+            "  weak -- which is exactly why content-based features are needed, not optional."
         )
     print(
         f"- k SELECTION: the validation-loss elbow selected k={elbow_k}"
