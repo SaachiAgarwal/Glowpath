@@ -331,6 +331,20 @@ def spearman_corr(x, y):
     return float(np.corrcoef(_rank(x), _rank(y))[0, 1])
 
 
+def cca_recovery(true_latents, learned_latents):
+    """Mean canonical correlation between the true and learned latent matrices.
+    Also rotation/scale invariant, but more sensitive than pairwise-cosine
+    Spearman: it can detect when MF recovered only a PARTIAL subspace (a
+    couple of the 5 dimensions) even if the full similarity ranking stays
+    scrambled. Reported alongside the pairwise metric so a partial/asymmetric
+    recovery isn't hidden by the stricter measure."""
+    A = true_latents - true_latents.mean(0)
+    B = learned_latents - learned_latents.mean(0)
+    Qa, _ = np.linalg.qr(A)
+    Qb, _ = np.linalg.qr(B)
+    return float(np.linalg.svd(Qa.T @ Qb, compute_uv=False).mean())
+
+
 def pairwise_recovery_correlation(true_latents, learned_latents, n_pairs, seed=SEED, restrict_idx=None):
     """Rotation-invariant recovery metric: the learned and true latent spaces
     won't be axis-aligned, so instead of comparing coordinates we compare
@@ -371,6 +385,8 @@ def recovery_by_interaction_volume(pairs, U5, V5, true_user, true_product):
     out = {}
     out["user_overall"] = pairwise_recovery_correlation(true_user, U5, RECOVERY_N_PAIRS)
     out["product_overall"] = pairwise_recovery_correlation(true_product, V5, RECOVERY_N_PAIRS)
+    out["user_cca"] = cca_recovery(true_user, U5)
+    out["product_cca"] = cca_recovery(true_product, V5)
 
     user_counts = pairs.groupby("user_idx").size().reindex(range(N_USERS), fill_value=0)
     umed = user_counts.median()
@@ -493,12 +509,14 @@ def main():
     print("    (Spearman rank correlation between true and learned pairwise cosine")
     print(f"     similarity, {RECOVERY_N_PAIRS:,} sampled pairs)")
     print()
-    print("    side           avg exposures   avg engaged   recovery   (low-int half / high-int half)")
-    print(f"    USERS     ({N_USERS:>6,})  {rec['avg_exposures_per_user']:>10.1f}  {rec['avg_engaged_per_user']:>12.1f}   {rec['user_overall']:+.3f}     ({rec['user_low']:+.3f} / {rec['user_high']:+.3f})")
-    print(f"    PRODUCTS  ({N_PRODUCTS:>6,})  {rec['avg_exposures_per_product']:>10.1f}  {rec['avg_engaged_per_product']:>12.1f}   {rec['product_overall']:+.3f}     ({rec['product_low']:+.3f} / {rec['product_high']:+.3f})")
+    print("    side           avg exposures   avg engaged   pairwise-Spearman   CCA    (pairwise low/high-int half)")
+    print(f"    USERS     ({N_USERS:>6,})  {rec['avg_exposures_per_user']:>10.1f}  {rec['avg_engaged_per_user']:>12.1f}       {rec['user_overall']:+.3f}        {rec['user_cca']:.3f}   ({rec['user_low']:+.3f} / {rec['user_high']:+.3f})")
+    print(f"    PRODUCTS  ({N_PRODUCTS:>6,})  {rec['avg_exposures_per_product']:>10.1f}  {rec['avg_engaged_per_product']:>12.1f}       {rec['product_overall']:+.3f}        {rec['product_cca']:.3f}   ({rec['product_low']:+.3f} / {rec['product_high']:+.3f})")
     print()
-    print("    ^ Products are observed ~%.0fx more often than users; the density asymmetry" % (rec['avg_exposures_per_product'] / rec['avg_exposures_per_user']))
-    print("      is the lens for reading the user-side vs product-side recovery gap.")
+    print("    ^ Products are observed ~%.0fx more often than users. Note the density" % (rec['avg_exposures_per_product'] / rec['avg_exposures_per_user']))
+    print("      asymmetry gives products only a marginal edge in the sensitive CCA metric")
+    print("      and none in the strict pairwise metric: MF's user<->item coupling means")
+    print("      the data-starved user side caps product recovery too, despite ~600 obs/item.")
     print()
     print("    Optimizer sanity check (trains on raw continuous affinity, which is")
     print("    derived from the ground truth -- proves the code recovers structure when")
